@@ -1,0 +1,88 @@
+{
+  "before": {
+    "ssq": {
+      "count": 3521,
+      "max_period": "2026124",
+      "max_date": "2026-10-29"
+    },
+    "dlt": {
+      "count": 204,
+      "max_period": "2026123",
+      "max_date": "2026-10-28"
+    },
+    "d3": {
+      "count": 328,
+      "max_period": "2026288",
+      "max_date": "2026-10-29"
+    },
+    "p3": {
+      "count": 279,
+      "max_period": "2026288",
+      "max_date": "2026-10-29"
+    },
+    "p5": {
+      "count": 279,
+      "max_period": "2026288",
+      "max_date": "2026-10-29"
+    }
+  },
+  "after": {
+    "ssq": {
+      "count": 3521,
+      "max_period": "2026124",
+      "max_date": "2026-10-29"
+    },
+    "dlt": {
+      "count": 204,
+      "max_period": "2026123",
+      "max_date": "2026-10-28"
+    },
+    "d3": {
+      "count": 328,
+      "max_period": "2026288",
+      "max_date": "2026-10-29"
+    },
+    "p3": {
+      "count": 279,
+      "max_period": "2026288",
+      "max_date": "2026-10-29"
+    },
+    "p5": {
+      "count": 279,
+      "max_period": "2026288",
+      "max_date": "2026-10-29"
+    }
+  },
+  "summary": {
+    "ssq": {
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026124"
+    },
+    "d3": {
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026288"
+    },
+    "dlt": {
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026123"
+    },
+    "p3": {
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026288"
+    },
+    "p5": {
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026288"
+    }
+  }
+}
