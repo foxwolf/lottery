@@ -8,7 +8,16 @@ APP_PORT=28081
 PUBLIC_PORT=28080
 
 echo "==> packages"
-dnf -y install nginx python3 git
+dnf -y install nginx git
+# Rocky 8 default python3 is 3.6; view_server needs 3.9+ (from __future__ annotations / typing)
+if ! command -v python3.9 >/dev/null 2>&1; then
+  dnf -y install python39
+fi
+PYTHON_BIN="$(command -v python3.9 || true)"
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "ERROR: need python3.9+ (Rocky 8: dnf install python39)"; exit 1
+fi
+echo "using $PYTHON_BIN"
 
 echo "==> user lottery"
 id lottery &>/dev/null || useradd --system --home "$OPT_DIR" --shell /sbin/nologin lottery
@@ -58,7 +67,7 @@ Group=lottery
 WorkingDirectory=/opt/lottery
 Environment=LOTTERY_HOST=127.0.0.1
 Environment=LOTTERY_PORT=28081
-ExecStart=/usr/bin/python3 /opt/lottery/view_server.py
+ExecStart=/usr/bin/python3.9 /opt/lottery/view_server.py
 Restart=always
 RestartSec=3
 NoNewPrivileges=true
