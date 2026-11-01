@@ -1,0 +1,84 @@
+# 对应 Grok 例程「双色球开奖次日开机更新」
+# 原调度 CRON_TZ=Asia/Shanghai: 0,30 8-22 * * 1,3,5
+# → UTC: 0,30 0-14 * * 1,3,5（上海 UTC+8）
+name: SSQ next-day update
+
+on:
+  schedule:
+    - cron: "0,30 0-14 * * 1,3,5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ssq-db-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Snapshot max SSQ period
+        id: before
+        run: |
+          BEFORE=$(python3 - <<'PY'
+          import sqlite3
+          c = sqlite3.connect("lottery.db")
+          print(c.execute("SELECT MAX(period) FROM ssq").fetchone()[0] or "")
+          PY
+          )
+          echo "period=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "Before SSQ max period: $BEFORE"
+
+      - name: Run update_lottery.py
+        run: python3 update_lottery.py
+
+      - name: Refresh SSQ mingxi (recent 30)
+        run: python3 update_ssq_mingxi.py --limit 30
+        continue-on-error: true
+
+      - name: Compare watch pick
+        id: compare
+        run: |
+          python3 scripts/ssq_watch_compare.py --mode next-day --update-state --out _next_day_summary.md
+          PERIOD=$(python3 -c "import json; print(json.load(open('_next_day_summary.json'))['period'])")
+          ALREADY=$(python3 -c "import json; print(json.load(open('_next_day_summary.json'))['already_notified'])")
+          echo "period=$PERIOD" >> "$GITHUB_OUTPUT"
+          echo "already=$ALREADY" >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        run: |
+          {
+            echo "## 开奖次日更新"
+            echo
+            cat _next_day_summary.md
+            echo
+            echo "### update summary"
+            echo '```json'
+            if [ -f _update_summary.json ]; then cat _update_summary.json; else echo '{}'; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit DB / state if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lottery.db _update_summary.json _next_day_notified.json _next_day_summary.md _next_day_summary.json || true
+          if git diff --cached --quiet; then
+            echo "No DB/state changes to commit."
+          else
+            PERIOD="${{ steps.compare.outputs.period }}"
+            git commit -m "chore(ci): next-day update SSQ ${PERIOD} [skip ci]"
+            git push
+          fi

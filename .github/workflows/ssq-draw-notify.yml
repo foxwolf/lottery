@@ -1,0 +1,70 @@
+# 对应 Grok 例程「双色球选号开奖通知」
+# 原调度 CRON_TZ=Asia/Shanghai: 0 22 * * 0,2,4
+# → UTC: 0 14 * * 0,2,4（上海 UTC+8；周日/二/四 22:00）
+# Actions 无法 SendToUser：结果写入 Job Summary + _draw_notify.md（可提交）
+name: SSQ draw notify
+
+on:
+  schedule:
+    - cron: "0 14 * * 0,2,4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ssq-db-update
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run update_lottery.py
+        run: python3 update_lottery.py
+
+      - name: Refresh SSQ mingxi (recent 30)
+        run: python3 update_ssq_mingxi.py --limit 30
+        continue-on-error: true
+
+      - name: Always compare watch pick
+        run: python3 scripts/ssq_watch_compare.py --mode draw-notify --out _draw_notify.md
+
+      - name: Job summary (always)
+        run: |
+          {
+            echo "## 选号开奖通知"
+            echo
+            cat _draw_notify.md
+            echo
+            echo "### update summary"
+            echo '```json'
+            if [ -f _update_summary.json ]; then cat _update_summary.json; else echo '{}'; fi
+            echo '```'
+            echo
+            echo "> GitHub Actions 不能聊天推送。Grok Bot 例程仍可另行通知；稳定后可暂停本机例程。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit DB / notify artifact if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lottery.db _update_summary.json _draw_notify.md _draw_notify.json || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            PERIOD=$(python3 -c "import json; print(json.load(open('_draw_notify.json'))['period'])")
+            LEVEL=$(python3 -c "import json; print(json.load(open('_draw_notify.json'))['level'])")
+            git commit -m "chore(ci): draw notify SSQ ${PERIOD} (${LEVEL}) [skip ci]"
+            git push
+          fi

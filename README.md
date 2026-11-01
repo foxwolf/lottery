@@ -20,3 +20,22 @@
 ## 守号（备份时点）
 
 红 `05 12 16 25 29 33`，蓝 `15`
+
+
+## GitHub Actions（替代/备份本机例程）
+
+| Workflow | 对应例程 | cron（UTC） | 上海时间含义 |
+|----------|----------|-------------|--------------|
+| `ssq-next-day-update.yml` | 开奖次日开机更新 | `0,30 0-14 * * 1,3,5` | 周一/三/五 08:00–22:30 每 30 分钟 |
+| `ssq-draw-notify.yml` | 选号开奖通知 | `0 14 * * 0,2,4` | 周日/二/四 22:00 |
+
+行为概要：
+
+1. 跑 `update_lottery.py`（及明细 `--limit 30`）。
+2. 有新增则 **commit + push** `lottery.db`（及 `_update_summary.json` / 状态文件）到 `main`。
+3. 用 `watch_pick.json` 对照最新一期，写入 Job Summary；开奖通知另写 `_draw_notify.md`。
+4. Actions **不能**聊天推送；需要的话仍由 Grok Bot 例程通知。Actions 稳定后可暂停本机两条例程。
+
+守号改号：编辑仓库根目录 `watch_pick.json`。
+
+说明：GitHub cron 可能有数分钟延迟或偶发漏跑；公网 node2 同步不在本 workflow 内（见 `deploy/`）。

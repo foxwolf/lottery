@@ -1,5 +1,5 @@
 ﻿# -*- coding: utf-8 -*-
-"""Update D:\\develop\\agent\\lottery\\lottery.db with latest China lottery draws.
+"""Update lottery.db (repo root) with latest China lottery draws.
 Sources: cwl.gov.cn (ssq, 3d) and sporttery.cn (dlt, pl3, pl5).
 Safe to re-run: INSERT OR IGNORE by period.
 """
@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-DB_PATH = Path(r"D:\develop\agent\lottery\lottery.db")
+DB_PATH = Path(__file__).resolve().parent / "lottery.db"
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -718,7 +718,7 @@ def main() -> None:
             "max_date": max_draw_date(conn, t),
         }
     print("AFTER:", json.dumps(after, ensure_ascii=False, indent=2))
-    Path(r"D:\develop\agent\lottery\_update_summary.json").write_text(
+    (Path(__file__).resolve().parent / "_update_summary.json").write_text(
         json.dumps({"before": before, "after": after, "summary": summary}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
