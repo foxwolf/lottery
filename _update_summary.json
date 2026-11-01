@@ -28,61 +28,77 @@
   },
   "after": {
     "ssq": {
-      "count": 3521,
-      "max_period": "2026124",
-      "max_date": "2026-10-29"
+      "count": 3522,
+      "max_period": "2026125",
+      "max_date": "2026-11-01"
     },
     "dlt": {
-      "count": 204,
-      "max_period": "2026123",
-      "max_date": "2026-10-28"
+      "count": 205,
+      "max_period": "2026124",
+      "max_date": "2026-10-31"
     },
     "d3": {
-      "count": 328,
-      "max_period": "2026288",
-      "max_date": "2026-10-29"
+      "count": 331,
+      "max_period": "2026291",
+      "max_date": "2026-11-01"
     },
     "p3": {
-      "count": 279,
-      "max_period": "2026288",
-      "max_date": "2026-10-29"
+      "count": 282,
+      "max_period": "2026291",
+      "max_date": "2026-11-01"
     },
     "p5": {
-      "count": 279,
-      "max_period": "2026288",
-      "max_date": "2026-10-29"
+      "count": 282,
+      "max_period": "2026291",
+      "max_date": "2026-11-01"
     }
   },
   "summary": {
     "ssq": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026124"
+      "inserted": 1,
+      "periods": [
+        "2026125"
+      ],
+      "api_latest": "2026125"
     },
     "d3": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026288"
+      "inserted": 3,
+      "periods": [
+        "2026289",
+        "2026290",
+        "2026291"
+      ],
+      "api_latest": "2026291"
     },
     "dlt": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026123"
+      "inserted": 1,
+      "periods": [
+        "2026124"
+      ],
+      "api_latest": "2026124"
     },
     "p3": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026288"
+      "inserted": 3,
+      "periods": [
+        "2026289",
+        "2026290",
+        "2026291"
+      ],
+      "api_latest": "2026291"
     },
     "p5": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026288"
+      "inserted": 3,
+      "periods": [
+        "2026289",
+        "2026290",
+        "2026291"
+      ],
+      "api_latest": "2026291"
     }
   }
 }
