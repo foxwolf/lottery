@@ -1,11 +1,12 @@
 # 对应 Grok 例程「双色球开奖次日开机更新」
-# 原调度 CRON_TZ=Asia/Shanghai: 0,30 8-22 * * 1,3,5
-# → UTC: 0,30 0-14 * * 1,3,5（上海 UTC+8）
+# 开奖日：周二/四/日 → 次日 00:00 Asia/Shanghai 更新一次
+# 周一/三/五 00:00 CST = 周日/二/四 16:00 UTC
+# → UTC cron: 0 16 * * 0,2,4
 name: SSQ next-day update
 
 on:
   schedule:
-    - cron: "0,30 0-14 * * 1,3,5"
+    - cron: "0 16 * * 0,2,4"
   workflow_dispatch:
 
 permissions:
