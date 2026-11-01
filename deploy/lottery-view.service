@@ -1,0 +1,27 @@
+[Unit]
+Description=Lottery DB read-only viewer (view_server.py)
+After=network.target
+Documentation=https://github.com/foxwolf/lottery
+
+[Service]
+Type=simple
+User=lottery
+Group=lottery
+WorkingDirectory=/opt/lottery
+Environment=LOTTERY_HOST=127.0.0.1
+Environment=LOTTERY_PORT=28081
+# Prefer python3 from PATH; Rocky 8 ships python3
+ExecStart=/usr/bin/python3 /opt/lottery/view_server.py
+Restart=always
+RestartSec=3
+# Soft hardening (read-only site)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/lottery
+# SQLite needs write for WAL/-shm if created; if DB is truly read-only mount, drop RW and use ProtectSystem=full
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
