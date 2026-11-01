@@ -1,1 +1,10 @@
-{"routine": "ssq-next-day-boot-update", "ssq_period": "2026124", "draw_date": "2026-10-29", "notified_at": "2026-10-30T09:20:38+08:00", "source": "next-day-first-success"}
+{
+  "routine": "ssq-next-day-boot-update",
+  "ssq_period": "2026125",
+  "draw_date": "2026-11-01",
+  "notified_at": "2026-11-02T04:08:37.782038+08:00",
+  "source": "github-actions-next-day",
+  "level": "未中奖",
+  "red_hits": 0,
+  "blue_hit": false
+}
