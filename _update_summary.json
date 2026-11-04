@@ -1,9 +1,9 @@
 {
   "before": {
     "ssq": {
-      "count": 3522,
-      "max_period": "2026125",
-      "max_date": "2026-11-01"
+      "count": 3523,
+      "max_period": "2026126",
+      "max_date": "2026-11-03"
     },
     "dlt": {
       "count": 206,
@@ -11,9 +11,9 @@
       "max_date": "2026-11-02"
     },
     "d3": {
-      "count": 331,
-      "max_period": "2026291",
-      "max_date": "2026-11-01"
+      "count": 333,
+      "max_period": "2026293",
+      "max_date": "2026-11-03"
     },
     "p3": {
       "count": 284,
@@ -56,20 +56,15 @@
   "summary": {
     "ssq": {
       "ok": true,
-      "inserted": 1,
-      "periods": [
-        "2026126"
-      ],
+      "inserted": 0,
+      "periods": [],
       "api_latest": "2026126",
       "source": "https://datachart.500.com/ssq/history/newinc/history.php"
     },
     "d3": {
       "ok": true,
-      "inserted": 2,
-      "periods": [
-        "2026292",
-        "2026293"
-      ],
+      "inserted": 0,
+      "periods": [],
       "api_latest": "2026293"
     },
     "dlt": {
