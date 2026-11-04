@@ -6,9 +6,9 @@
       "max_date": "2026-11-01"
     },
     "dlt": {
-      "count": 205,
-      "max_period": "2026124",
-      "max_date": "2026-10-31"
+      "count": 206,
+      "max_period": "2026125",
+      "max_date": "2026-11-02"
     },
     "d3": {
       "count": 331,
@@ -16,63 +16,79 @@
       "max_date": "2026-11-01"
     },
     "p3": {
-      "count": 282,
-      "max_period": "2026291",
-      "max_date": "2026-11-01"
+      "count": 284,
+      "max_period": "2026293",
+      "max_date": "2026-11-03"
     },
     "p5": {
-      "count": 282,
-      "max_period": "2026291",
-      "max_date": "2026-11-01"
+      "count": 284,
+      "max_period": "2026293",
+      "max_date": "2026-11-03"
     }
   },
   "after": {
     "ssq": {
-      "count": 3522,
-      "max_period": "2026125",
-      "max_date": "2026-11-01"
+      "count": 3523,
+      "max_period": "2026126",
+      "max_date": "2026-11-03"
     },
     "dlt": {
-      "count": 205,
-      "max_period": "2026124",
-      "max_date": "2026-10-31"
+      "count": 206,
+      "max_period": "2026125",
+      "max_date": "2026-11-02"
     },
     "d3": {
-      "count": 331,
-      "max_period": "2026291",
-      "max_date": "2026-11-01"
+      "count": 333,
+      "max_period": "2026293",
+      "max_date": "2026-11-03"
     },
     "p3": {
-      "count": 282,
-      "max_period": "2026291",
-      "max_date": "2026-11-01"
+      "count": 284,
+      "max_period": "2026293",
+      "max_date": "2026-11-03"
     },
     "p5": {
-      "count": 282,
-      "max_period": "2026291",
-      "max_date": "2026-11-01"
+      "count": 284,
+      "max_period": "2026293",
+      "max_date": "2026-11-03"
     }
   },
   "summary": {
     "ssq": {
-      "ok": false,
-      "error": "HTTP Error 403: Forbidden"
+      "ok": true,
+      "inserted": 1,
+      "periods": [
+        "2026126"
+      ],
+      "api_latest": "2026126",
+      "source": "https://datachart.500.com/ssq/history/newinc/history.php"
     },
     "d3": {
-      "ok": false,
-      "error": "HTTP Error 403: Forbidden"
+      "ok": true,
+      "inserted": 2,
+      "periods": [
+        "2026292",
+        "2026293"
+      ],
+      "api_latest": "2026293"
     },
     "dlt": {
-      "ok": false,
-      "error": "HTTP Error 567: Unknown Status"
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026125"
     },
     "p3": {
-      "ok": false,
-      "error": "HTTP Error 567: Unknown Status"
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026293"
     },
     "p5": {
-      "ok": false,
-      "error": "HTTP Error 567: Unknown Status"
+      "ok": true,
+      "inserted": 0,
+      "periods": [],
+      "api_latest": "2026293"
     }
   }
 }

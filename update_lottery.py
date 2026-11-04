@@ -1,6 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 """Update lottery.db (repo root) with latest China lottery draws.
-Sources: cwl.gov.cn (ssq, 3d) and sporttery.cn (dlt, pl3, pl5).
+Primary: cwl.gov.cn (ssq, 3d) and sporttery.cn (dlt, pl3, pl5).
+Fallback (GitHub Actions / blocked regions): datachart.500.com HTML tables.
 Safe to re-run: INSERT OR IGNORE by period.
 """
 from __future__ import annotations
@@ -29,22 +30,40 @@ CWL_URL = (
 SPORTTERY_URL = (
     "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry"
 )
+CHART500_BASE = "https://datachart.500.com/"
+CHART500_SSQ = "ssq/history/newinc/history.php"
+CHART500_DLT = "dlt/history/newinc/history.php"
+CHART500_D3 = "sd/history/inc/history.php"
+CHART500_P3 = "pls/history/inc/history.php"
+CHART500_P5 = "plw/history/inc/history.php"
+
+
+def http_get_bytes(url: str, referer: str, timeout: int = 45, attempts: int = 4) -> bytes:
+    last_err: Optional[Exception] = None
+    for attempt in range(attempts):
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": UA,
+                "Referer": referer,
+                "Accept": "text/html,application/json,text/plain,*/*",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+            last_err = e
+            if attempt + 1 < attempts:
+                time.sleep(min(8, 2 ** attempt))
+    raise RuntimeError(f"GET failed after {attempts} tries: {url!r}: {last_err}")
 
 
 def http_get_json(url: str, params: dict, referer: str) -> dict:
     qs = urllib.parse.urlencode(params)
     full = f"{url}?{qs}"
-    req = urllib.request.Request(
-        full,
-        headers={
-            "User-Agent": UA,
-            "Referer": referer,
-            "Accept": "application/json, text/plain, */*",
-        },
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=45) as resp:
-        raw = resp.read()
+    raw = http_get_bytes(full, referer=referer)
     return json.loads(raw.decode("utf-8"))
 
 
@@ -220,6 +239,217 @@ def fetch_sporttery(game_no: str, pages: int = 3, page_size: int = 100) -> list[
     return items
 
 
+def strip_html_cell(val: str) -> str:
+    s = re.sub(r"<[^>]+>", "", val or "")
+    return s.strip().replace("\xa0", "").replace("&nbsp;", "").strip()
+
+
+def chart500_period(raw: str) -> str:
+    s = str(raw).strip()
+    if len(s) == 7 and s.isdigit():
+        return s
+    if len(s) == 5 and s.isdigit():
+        return normalize_pl_period(s)
+    return s
+
+
+def fetch_chart500_rows(chart_path: str, limit: int = 200) -> list[list[str]]:
+    """Fetch recent draw rows from datachart.500.com (newest first)."""
+    qs = urllib.parse.urlencode({"limit": str(limit), "start": "0", "end": "9999999"})
+    url = f"{CHART500_BASE}{chart_path}?{qs}"
+    game = chart_path.split("/")[0]
+    referer = f"{CHART500_BASE}{game}/history/"
+    raw = http_get_bytes(url, referer=referer, timeout=60, attempts=5)
+    html = raw.decode("gb2312", errors="replace")
+    chunk_m = re.search(r'<tbody id="tdata">(.*?)</tbody>', html, re.S)
+    chunk = chunk_m.group(1) if chunk_m else html
+    out: list[list[str]] = []
+    for row in re.findall(r'<tr class="t_tr\d">.*?</tr>', chunk, re.S):
+        cells = [strip_html_cell(c) for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
+        cells = [c for c in cells if c != ""]
+        if not cells:
+            continue
+        if len(cells) >= 2 and cells[0].isdigit() and len(cells[0]) <= 2 and cells[1].isdigit():
+            if len(cells[1]) >= 5:
+                cells = cells[1:]
+        if not cells[0].isdigit() or len(cells[0]) < 5:
+            continue
+        out.append(cells)
+    if not out:
+        raise RuntimeError(f"500.com empty table: {chart_path}")
+    return out
+
+
+def fetch_ssq_rows(issue_count: int = 200) -> tuple[list[dict], str]:
+    try:
+        return fetch_cwl("ssq", issue_count), CWL_URL + "?name=ssq"
+    except Exception as cwl_err:
+        rows500 = fetch_chart500_rows(CHART500_SSQ, limit=min(issue_count, 300))
+        items: list[dict] = []
+        for cells in rows500:
+            if len(cells) < 15:
+                continue
+            period = chart500_period(cells[0])
+            reds = [int(cells[i]) for i in range(1, 7)]
+            blue = int(cells[7])
+            draw_date = cells[14]
+            items.append(
+                {
+                    "code": period,
+                    "date": draw_date,
+                    "red": ",".join(f"{x:02d}" for x in reds),
+                    "blue": str(blue),
+                    "sales": cells[8],
+                    "poolmoney": cells[13],
+                    "prizegrades": [
+                        {"type": 1, "typenum": cells[9], "typemoney": cells[10]},
+                        {"type": 2, "typenum": cells[11], "typemoney": cells[12]},
+                    ],
+                }
+            )
+        if not items:
+            raise RuntimeError(f"500.com SSQ parse failed after CWL: {cwl_err}")
+        return items, CHART500_BASE + CHART500_SSQ
+
+
+def remote_ssq_latest_period() -> Optional[str]:
+    rows500 = fetch_chart500_rows(CHART500_SSQ, limit=5)
+    if not rows500:
+        return None
+    return chart500_period(rows500[0][0])
+
+
+def fetch_d3_rows(issue_count: int = 300) -> tuple[list[dict], str]:
+    try:
+        return fetch_cwl("3d", issue_count), CWL_URL + "?name=3d"
+    except Exception as cwl_err:
+        rows500 = fetch_chart500_rows(CHART500_D3, limit=min(issue_count, 300))
+        items: list[dict] = []
+        for cells in rows500:
+            if len(cells) < 9:
+                continue
+            period = chart500_period(cells[0])
+            nums = [int(x) for x in cells[1].split() if x.strip().isdigit()]
+            if len(nums) != 3:
+                continue
+            draw_date = cells[8]
+            items.append(
+                {
+                    "code": period,
+                    "date": draw_date,
+                    "red": ",".join(str(x) for x in nums),
+                    "sales": cells[3],
+                    "poolmoney": None,
+                    "prizegrades": [],
+                }
+            )
+        if not items:
+            raise RuntimeError(f"500.com 3D parse failed after CWL: {cwl_err}")
+        return items, CHART500_BASE + CHART500_D3
+
+
+def chart500_to_sporttery_dlt(cells: list[str]) -> Optional[dict]:
+    if len(cells) < 14:
+        return None
+    period = chart500_period(cells[0])
+    front = [int(cells[i]) for i in range(1, 6)]
+    back = [int(cells[i]) for i in range(6, 8)]
+    balls = front + back
+    draw_date = cells[-1]
+    return {
+        "lotteryDrawNum": period,
+        "lotteryDrawTime": draw_date,
+        "lotteryDrawResult": " ".join(f"{x:02d}" for x in balls),
+        "totalSaleAmount": cells[8],
+        "poolBalanceAfterdraw": cells[-2],
+        "prizeLevelList": [
+            {"sort": 101, "stakeCount": cells[9], "stakeAmountFormat": cells[10]},
+            {"sort": 301, "stakeCount": cells[11], "stakeAmountFormat": cells[12]},
+        ],
+    }
+
+
+def fetch_dlt_rows(pages: int = 2, page_size: int = 100) -> tuple[list[dict], str]:
+    limit = min(pages * page_size, 300)
+    try:
+        return fetch_sporttery("85", pages=pages, page_size=page_size), SPORTTERY_URL + "?gameNo=85"
+    except Exception as st_err:
+        rows500 = fetch_chart500_rows(CHART500_DLT, limit=limit)
+        items: list[dict] = []
+        for cells in rows500:
+            item = chart500_to_sporttery_dlt(cells)
+            if item:
+                items.append(item)
+        if not items:
+            raise RuntimeError(f"500.com DLT parse failed after sporttery: {st_err}")
+        return items, CHART500_BASE + CHART500_DLT
+
+
+def chart500_to_sporttery_p3(cells: list[str]) -> Optional[dict]:
+    if len(cells) < 11:
+        return None
+    period = chart500_period(cells[0])
+    nums = [int(x) for x in cells[1].split() if x.strip().isdigit()]
+    if len(nums) != 3:
+        return None
+    return {
+        "lotteryDrawNum": period,
+        "lotteryDrawTime": cells[-1],
+        "lotteryDrawResult": " ".join(str(x) for x in nums),
+        "totalSaleAmount": cells[3],
+        "prizeLevelList": [
+            {"sort": 10, "stakeCount": cells[4], "stakeAmountFormat": cells[5]},
+            {"sort": 20, "stakeCount": cells[6], "stakeAmountFormat": cells[7]},
+            {"sort": 30, "stakeCount": cells[8], "stakeAmountFormat": cells[9]},
+        ],
+    }
+
+
+def fetch_p3_rows(pages: int = 3, page_size: int = 100) -> tuple[list[dict], str]:
+    limit = min(pages * page_size, 300)
+    try:
+        return fetch_sporttery("35", pages=pages, page_size=page_size), SPORTTERY_URL + "?gameNo=35"
+    except Exception as st_err:
+        rows500 = fetch_chart500_rows(CHART500_P3, limit=limit)
+        items = [chart500_to_sporttery_p3(c) for c in rows500]
+        items = [x for x in items if x]
+        if not items:
+            raise RuntimeError(f"500.com P3 parse failed after sporttery: {st_err}")
+        return items, CHART500_BASE + CHART500_P3
+
+
+def chart500_to_sporttery_p5(cells: list[str]) -> Optional[dict]:
+    if len(cells) < 5:
+        return None
+    period = chart500_period(cells[0])
+    nums = [int(x) for x in cells[1].split() if x.strip().isdigit()]
+    if len(nums) != 5:
+        return None
+    return {
+        "lotteryDrawNum": period,
+        "lotteryDrawTime": cells[-1],
+        "lotteryDrawResult": " ".join(str(x) for x in nums),
+        "totalSaleAmount": cells[3],
+        "prizeLevelList": [],
+    }
+
+
+def fetch_p5_rows(pages: int = 3, page_size: int = 100) -> tuple[list[dict], str]:
+    limit = min(pages * page_size, 300)
+    try:
+        return (
+            fetch_sporttery("350133", pages=pages, page_size=page_size),
+            SPORTTERY_URL + "?gameNo=350133",
+        )
+    except Exception as st_err:
+        rows500 = fetch_chart500_rows(CHART500_P5, limit=limit)
+        items = [chart500_to_sporttery_p5(c) for c in rows500]
+        items = [x for x in items if x]
+        if not items:
+            raise RuntimeError(f"500.com P5 parse failed after sporttery: {st_err}")
+        return items, CHART500_BASE + CHART500_P5
+
+
 def max_period(conn: sqlite3.Connection, table: str) -> Optional[str]:
     # Prefer chronological max by draw_date then period
     row = conn.execute(
@@ -238,7 +468,7 @@ def update_ssq(conn: sqlite3.Connection) -> dict:
     source = CWL_URL + "?name=ssq"
     try:
         existing_max = max_period(conn, "ssq")
-        rows = fetch_cwl("ssq", 200)
+        rows, source = fetch_ssq_rows(200)
         inserted = 0
         periods = []
         for item in rows:
@@ -325,10 +555,10 @@ def update_ssq(conn: sqlite3.Connection) -> dict:
             periods[-1] if periods else existing_max,
             inserted, "success", None, time.time() - t0,
         )
-        return {"ok": True, "inserted": inserted, "periods": periods, "api_latest": rows[0]["code"] if rows else None}
+        return {"ok": True, "inserted": inserted, "periods": periods, "api_latest": rows[0]["code"] if rows else None, "source": source}
     except Exception as e:
         log_crawl(conn, "ssq", source, None, None, 0, "error", str(e), time.time() - t0)
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": str(e), "source": source}
 
 
 def update_d3(conn: sqlite3.Connection) -> dict:
@@ -336,7 +566,7 @@ def update_d3(conn: sqlite3.Connection) -> dict:
     source = CWL_URL + "?name=3d"
     try:
         existing_max = max_period(conn, "d3")
-        rows = fetch_cwl("3d", 300)
+        rows, source = fetch_d3_rows(300)
         inserted = 0
         periods = []
         for item in rows:
@@ -420,7 +650,7 @@ def update_dlt(conn: sqlite3.Connection) -> dict:
                 existing5.add(p[2:])
             elif len(p) == 5:
                 existing5.add(p)
-        rows = fetch_sporttery("85", pages=2, page_size=100)
+        rows, source = fetch_dlt_rows(pages=2, page_size=100)
         inserted = 0
         periods = []
         for item in rows:
@@ -531,7 +761,7 @@ def update_p3(conn: sqlite3.Connection) -> dict:
     try:
         existing_max = max_period(conn, "p3")
         existing = {r[0] for r in conn.execute("SELECT period FROM p3")}
-        rows = fetch_sporttery("35", pages=3, page_size=100)
+        rows, source = fetch_p3_rows(pages=3, page_size=100)
         inserted = 0
         periods = []
         for item in rows:
@@ -598,7 +828,7 @@ def update_p5(conn: sqlite3.Connection) -> dict:
     try:
         existing_max = max_period(conn, "p5")
         existing = {r[0] for r in conn.execute("SELECT period FROM p5")}
-        rows = fetch_sporttery("350133", pages=3, page_size=100)
+        rows, source = fetch_p5_rows(pages=3, page_size=100)
         inserted = 0
         periods = []
         for item in rows:
@@ -680,6 +910,23 @@ def refresh_ssq_mingxi(limit: int = 30) -> None:
     except Exception as e:
         print(f"ssq mingxi refresh skipped: {e}")
 
+
+def validate_ssq_up_to_date(conn: sqlite3.Connection, summary: dict) -> None:
+    ssq = summary.get("ssq") or {}
+    if not ssq.get("ok"):
+        raise SystemExit(f"SSQ update failed: {ssq.get('error')}")
+    local = max_period(conn, "ssq")
+    try:
+        remote = remote_ssq_latest_period()
+    except Exception as e:
+        raise SystemExit(f"SSQ remote check failed (500.com): {e}") from e
+    if remote and local and remote > local:
+        raise SystemExit(
+            f"SSQ still behind public draw: db={local} remote={remote} fetch_source={ssq.get('source')}"
+        )
+    print(f"SSQ validation OK: db={local} remote={remote}")
+
+
 def main() -> None:
     if not DB_PATH.exists():
         raise SystemExit(f"DB not found: {DB_PATH}")
@@ -722,6 +969,7 @@ def main() -> None:
         json.dumps({"before": before, "after": after, "summary": summary}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    validate_ssq_up_to_date(conn, summary)
     conn.close()
     print("DONE")
     refresh_ssq_mingxi(limit=30)
