@@ -46,6 +46,24 @@ jobs:
       - name: Run update_lottery.py
         run: python3 update_lottery.py
 
+      - name: Verify SSQ database caught up
+        run: |
+          MAX=$(python3 - <<'PY'
+          import json, sqlite3, sys
+          summary = json.load(open("_update_summary.json"))["summary"]["ssq"]
+          if not summary.get("ok"):
+              print(f"SSQ update failed: {summary.get('error')}", file=sys.stderr)
+              sys.exit(1)
+          local = sqlite3.connect("lottery.db").execute("SELECT MAX(period) FROM ssq").fetchone()[0]
+          remote = summary.get("api_latest")
+          if remote and local and remote > local:
+              print(f"SSQ still behind: db={local} api_latest={remote}", file=sys.stderr)
+              sys.exit(1)
+          print(local or "")
+          PY
+          )
+          echo "SSQ max period after update: $MAX"
+
       - name: Refresh SSQ mingxi (recent 30)
         run: python3 update_ssq_mingxi.py --limit 30
         continue-on-error: true
