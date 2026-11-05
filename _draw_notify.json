@@ -1,16 +1,16 @@
 {
   "mode": "draw-notify",
-  "period": "2026125",
-  "draw_date": "2026-11-01",
+  "period": "2026127",
+  "draw_date": "2026-11-05",
   "draw_red": [
-    "04",
-    "06",
-    "10",
-    "15",
-    "26",
-    "27"
+    "13",
+    "14",
+    "19",
+    "25",
+    "29",
+    "32"
   ],
-  "draw_blue": "11",
+  "draw_blue": "12",
   "pick_red": [
     "05",
     "12",
@@ -20,8 +20,11 @@
     "33"
   ],
   "pick_blue": "15",
-  "red_hits": 0,
-  "hit_reds": [],
+  "red_hits": 2,
+  "hit_reds": [
+    "25",
+    "29"
+  ],
   "blue_hit": false,
   "level": "未中奖",
   "already_notified": false
