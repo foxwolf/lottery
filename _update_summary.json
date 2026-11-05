@@ -1,29 +1,29 @@
 {
   "before": {
     "ssq": {
-      "count": 3523,
-      "max_period": "2026126",
-      "max_date": "2026-11-03"
+      "count": 3524,
+      "max_period": "2026127",
+      "max_date": "2026-11-05"
     },
     "dlt": {
-      "count": 206,
-      "max_period": "2026125",
-      "max_date": "2026-11-02"
+      "count": 207,
+      "max_period": "2026126",
+      "max_date": "2026-11-04"
     },
     "d3": {
-      "count": 333,
-      "max_period": "2026293",
-      "max_date": "2026-11-03"
+      "count": 335,
+      "max_period": "2026295",
+      "max_date": "2026-11-05"
     },
     "p3": {
-      "count": 284,
-      "max_period": "2026293",
-      "max_date": "2026-11-03"
+      "count": 286,
+      "max_period": "2026295",
+      "max_date": "2026-11-05"
     },
     "p5": {
-      "count": 284,
-      "max_period": "2026293",
-      "max_date": "2026-11-03"
+      "count": 286,
+      "max_period": "2026295",
+      "max_date": "2026-11-05"
     }
   },
   "after": {
@@ -56,46 +56,33 @@
   "summary": {
     "ssq": {
       "ok": true,
-      "inserted": 1,
-      "periods": [
-        "2026127"
-      ],
+      "inserted": 0,
+      "periods": [],
       "api_latest": "2026127",
       "source": "https://datachart.500.com/ssq/history/newinc/history.php"
     },
     "d3": {
       "ok": true,
-      "inserted": 2,
-      "periods": [
-        "2026294",
-        "2026295"
-      ],
+      "inserted": 0,
+      "periods": [],
       "api_latest": "2026295"
     },
     "dlt": {
       "ok": true,
-      "inserted": 1,
-      "periods": [
-        "2026126"
-      ],
+      "inserted": 0,
+      "periods": [],
       "api_latest": "2026126"
     },
     "p3": {
       "ok": true,
-      "inserted": 2,
-      "periods": [
-        "2026294",
-        "2026295"
-      ],
+      "inserted": 0,
+      "periods": [],
       "api_latest": "2026295"
     },
     "p5": {
       "ok": true,
-      "inserted": 2,
-      "periods": [
-        "2026294",
-        "2026295"
-      ],
+      "inserted": 0,
+      "periods": [],
       "api_latest": "2026295"
     }
   }
