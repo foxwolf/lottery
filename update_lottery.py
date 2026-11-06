@@ -885,30 +885,47 @@ def update_p5(conn: sqlite3.Connection) -> dict:
 
 def refresh_ssq_mingxi(limit: int = 30) -> None:
     """Refresh recent SSQ prize details via update_ssq_mingxi.py logic."""
-    try:
-        from update_ssq_mingxi import (
-            ensure_schema,
-            periods_from_db,
-            update_from_cjcp,
-            update_from_cwl_fallback,
-            log_crawl,
-            DB_PATH as M_DB,
-        )
-        import sqlite3, time
-        t0 = time.time()
-        conn = sqlite3.connect(str(M_DB))
-        ensure_schema(conn)
-        periods = periods_from_db(conn, limit)
-        ok, fail, errs = update_from_cjcp(conn, periods, 0.3)
-        update_from_cwl_fallback(conn, max_pages=2, page_size=30, delay=0.2)
-        log_crawl(conn, "cjcp+cwl(auto)", periods[-1], periods[0], ok,
-                  "success" if ok else "error",
-                  "; ".join(errs[:3]) if errs else None,
-                  time.time() - t0)
+    from update_ssq_mingxi import (
+        ensure_schema,
+        periods_from_db,
+        update_from_cjcp,
+        update_from_cwl_fallback,
+        update_from_ssq_draw,
+        update_from_chart500,
+        validate_latest_prize_detail,
+        log_crawl,
+        DB_PATH as M_DB,
+    )
+    import sqlite3
+    import time
+
+    t0 = time.time()
+    conn = sqlite3.connect(str(M_DB))
+    ensure_schema(conn)
+    periods = periods_from_db(conn, limit)
+    if not periods:
         conn.close()
-        print(f"ssq mingxi refreshed: ok={ok} fail={fail}")
-    except Exception as e:
-        print(f"ssq mingxi refresh skipped: {e}")
+        raise SystemExit("ssq mingxi: no ssq periods in db")
+    ok, fail, errs = update_from_cjcp(conn, periods, 0.3)
+    update_from_cwl_fallback(conn, max_pages=2, page_size=30, delay=0.2)
+    ssq_filled = update_from_ssq_draw(conn, periods)
+    chart_ok, chart_fail, chart_errs = update_from_chart500(conn, periods, 0.25)
+    validate_latest_prize_detail(conn)
+    log_crawl(
+        conn,
+        "cjcp+cwl+chart500(auto)",
+        periods[-1],
+        periods[0],
+        ok + ssq_filled + chart_ok,
+        "success",
+        "; ".join((errs + chart_errs)[:5]) or None,
+        time.time() - t0,
+    )
+    conn.close()
+    print(
+        f"ssq mingxi refreshed: cjcp_ok={ok} cjcp_fail={fail} "
+        f"ssq_draw={ssq_filled} chart500_ok={chart_ok} chart500_fail={chart_fail}"
+    )
 
 
 def validate_ssq_up_to_date(conn: sqlite3.Connection, summary: dict) -> None:

@@ -4,6 +4,8 @@
 Primary: https://www.cjcp.cn/kaijiang/ssq{period}.html
   (detail pages linked from ssqmingxi.html)
 Fallback/regions: cwl.gov.cn findDrawNotice prizegrades + content.
+CI fallback: datachart.500.com (via ssq draw row / history.php) for 一/二等奖;
+  三至六等奖仅写入固定单注奖金（不臆造注数）；一等奖地域仍依赖 cwl/cjcp。
 """
 from __future__ import annotations
 
@@ -11,7 +13,9 @@ import argparse
 import json
 import re
 import sqlite3
+import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -47,20 +51,32 @@ WIN_COND = {
     6: "2+1 / 1+1 / 0+1",
     7: "3+0",
 }
+# 三至六等奖及福运奖单注奖金为规则固定值（仅 fallback 补全奖级行，注数仍为空）
+FIXED_GRADE_AMOUNT = {3: 3000.0, 4: 200.0, 5: 10.0, 6: 5.0, 7: 5.0}
 
 
-def http_get_bytes(url: str, referer: str) -> bytes:
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": UA,
-            "Referer": referer,
-            "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-        },
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=45) as resp:
-        return resp.read()
+def http_get_bytes(
+    url: str, referer: str, timeout: int = 45, attempts: int = 4
+) -> bytes:
+    last_err: Optional[Exception] = None
+    for attempt in range(attempts):
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": UA,
+                "Referer": referer,
+                "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+            last_err = e
+            if attempt + 1 < attempts:
+                time.sleep(min(8, 2**attempt))
+    raise RuntimeError(f"GET failed after {attempts} tries: {url!r}: {last_err}")
 
 
 def http_get_json(url: str, params: dict, referer: str) -> dict:
@@ -338,6 +354,164 @@ def update_from_cwl_fallback(
     return filled_periods, region_periods
 
 
+def detail_source(conn: sqlite3.Connection, period: str, level: int) -> Optional[str]:
+    row = conn.execute(
+        "SELECT source FROM ssq_prize_detail WHERE period=? AND prize_level=?",
+        (period, level),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def should_skip_detail_upsert(conn: sqlite3.Connection, period: str, level: int) -> bool:
+    src = detail_source(conn, period, level)
+    return bool(src and src == "cjcp")
+
+
+def fill_fixed_lower_grades(
+    conn: sqlite3.Connection, period: str, source: str
+) -> None:
+    """Insert fixed-amount rows for grades 3–7 when missing (no bet counts)."""
+    for level in (3, 4, 5, 6, 7):
+        if should_skip_detail_upsert(conn, period, level):
+            continue
+        existing = conn.execute(
+            "SELECT 1 FROM ssq_prize_detail WHERE period=? AND prize_level=?",
+            (period, level),
+        ).fetchone()
+        if existing:
+            continue
+        upsert_detail(
+            conn,
+            period,
+            level,
+            None,
+            FIXED_GRADE_AMOUNT.get(level),
+            source,
+        )
+
+
+def update_from_ssq_draw(conn: sqlite3.Connection, periods: list[str]) -> int:
+    """Copy 一/二等奖 from ssq table (filled by update_lottery / 500.com)."""
+    filled = 0
+    for period in periods:
+        row = conn.execute(
+            """
+            SELECT prize_1_count, prize_1_amount, prize_2_count, prize_2_amount
+            FROM ssq WHERE period=?
+            """,
+            (period,),
+        ).fetchone()
+        if not row:
+            continue
+        p1c, p1a, p2c, p2a = row
+        if all(v is None for v in (p1c, p1a, p2c, p2a)):
+            continue
+        changed = False
+        for level, bet, amt in (
+            (1, p1c, p1a),
+            (2, p2c, p2a),
+        ):
+            if bet is None and amt is None:
+                continue
+            if should_skip_detail_upsert(conn, period, level):
+                continue
+            upsert_detail(conn, period, level, bet, amt, "chart500")
+            changed = True
+        if changed:
+            fill_fixed_lower_grades(conn, period, "chart500")
+            filled += 1
+            conn.commit()
+    return filled
+
+
+def update_from_chart500(
+    conn: sqlite3.Connection, periods: list[str], delay: float
+) -> tuple[int, int, list[str]]:
+    """Fetch 一/二等奖 from datachart.500.com for periods still missing detail."""
+    from update_lottery import CHART500_SSQ, chart500_period, fetch_chart500_rows
+
+    need = [
+        p
+        for p in periods
+        if not conn.execute(
+            "SELECT 1 FROM ssq_prize_detail WHERE period=? AND prize_level=1",
+            (p,),
+        ).fetchone()
+    ]
+    if not need:
+        return 0, 0, []
+
+    ok = 0
+    fail = 0
+    errors: list[str] = []
+    try:
+        rows500 = fetch_chart500_rows(
+            CHART500_SSQ, limit=min(max(len(need) + 15, 30), 300)
+        )
+    except Exception as e:
+        return 0, len(need), [f"chart500 batch: {e}"]
+
+    by_period: dict[str, list[str]] = {}
+    for cells in rows500:
+        if len(cells) < 14:
+            continue
+        db_period = chart500_period(cells[0])
+        by_period[db_period] = cells
+
+    for period in need:
+        cells = by_period.get(period)
+        if not cells:
+            fail += 1
+            errors.append(f"{period}: not in chart500 batch")
+            continue
+        try:
+            bet1 = parse_int(cells[9] if len(cells) > 9 else None)
+            amt1 = parse_money(cells[10] if len(cells) > 10 else None)
+            bet2 = parse_int(cells[11] if len(cells) > 11 else None)
+            amt2 = parse_money(cells[12] if len(cells) > 12 else None)
+            if bet1 is None and amt1 is None and bet2 is None and amt2 is None:
+                raise ValueError("no grade 1/2 data in row")
+            for level, bet, amt in ((1, bet1, amt1), (2, bet2, amt2)):
+                if bet is None and amt is None:
+                    continue
+                if should_skip_detail_upsert(conn, period, level):
+                    continue
+                upsert_detail(conn, period, level, bet, amt, "chart500")
+            fill_fixed_lower_grades(conn, period, "chart500")
+            conn.commit()
+            ok += 1
+        except Exception as e:
+            fail += 1
+            errors.append(f"{period}: {e}")
+            print(f"  chart500 FAIL {period}: {e}")
+        time.sleep(max(0.15, delay * 0.5))
+    return ok, fail, errors
+
+
+def latest_ssq_period(conn: sqlite3.Connection) -> Optional[str]:
+    row = conn.execute("SELECT MAX(period) FROM ssq").fetchone()
+    return row[0] if row and row[0] else None
+
+
+def period_prize_detail_count(conn: sqlite3.Connection, period: str) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) FROM ssq_prize_detail WHERE period=?", (period,)
+    ).fetchone()[0]
+
+
+def validate_latest_prize_detail(conn: sqlite3.Connection) -> None:
+    latest = latest_ssq_period(conn)
+    if not latest:
+        raise SystemExit("validate: no ssq periods in database")
+    n = period_prize_detail_count(conn, latest)
+    if n <= 0:
+        raise SystemExit(
+            f"validate: latest SSQ period {latest} has no ssq_prize_detail rows "
+            "(cjcp/cwl/chart500 all failed or skipped)"
+        )
+    print(f"validate OK: latest={latest} prize_detail_rows={n}")
+
+
 def log_crawl(
     conn: sqlite3.Connection,
     source: str,
@@ -366,6 +540,12 @@ def main() -> None:
     ap.add_argument("--cwl-pages", type=int, default=5)
     ap.add_argument("--skip-cjcp", action="store_true")
     ap.add_argument("--skip-cwl", action="store_true")
+    ap.add_argument("--skip-chart500", action="store_true")
+    ap.add_argument(
+        "--no-validate-latest",
+        action="store_true",
+        help="do not fail when latest period lacks prize detail",
+    )
     args = ap.parse_args()
 
     t0 = time.time()
@@ -391,6 +571,19 @@ def main() -> None:
             conn, args.cwl_pages, 30, max(0.2, args.delay * 0.5)
         )
 
+    ssq_draw_filled = update_from_ssq_draw(conn, periods)
+    print(f"ssq draw sync (chart500 columns): filled={ssq_draw_filled}")
+
+    chart_ok = chart_fail = 0
+    chart_errors: list[str] = []
+    if not args.skip_chart500:
+        print("chart500 fallback for periods missing grade-1 detail")
+        chart_ok, chart_fail, chart_errors = update_from_chart500(
+            conn, periods, args.delay
+        )
+        if chart_errors:
+            errors.extend(chart_errors[:10])
+
     detail_count = conn.execute("SELECT COUNT(*) FROM ssq_prize_detail").fetchone()[0]
     period_count = conn.execute(
         "SELECT COUNT(DISTINCT period) FROM ssq_prize_detail"
@@ -398,14 +591,21 @@ def main() -> None:
     print(
         f"done: cjcp_ok={cjcp_ok} cjcp_fail={cjcp_fail} "
         f"cwl_filled={cwl_filled} cwl_regions={cwl_regions} "
+        f"ssq_draw_filled={ssq_draw_filled} chart500_ok={chart_ok} chart500_fail={chart_fail} "
         f"detail_rows={detail_count} periods_with_detail={period_count}"
     )
 
-    status = "success" if cjcp_ok > 0 else "error"
-    err_msg = "; ".join(errors[:5]) if errors else None
+    latest = latest_ssq_period(conn)
+    latest_rows = period_prize_detail_count(conn, latest) if latest else 0
+    status = "success" if latest and latest_rows > 0 else "error"
+    err_msg = "; ".join(errors[:8]) if errors else None
+    if chart_errors and len(err_msg or "") < 400:
+        extra = "; ".join(chart_errors[:3])
+        err_msg = f"{err_msg}; {extra}" if err_msg else extra
+
     log_crawl(
         conn,
-        "cjcp+cwl",
+        "cjcp+cwl+chart500",
         periods[-1],
         periods[0],
         period_count,
@@ -413,7 +613,13 @@ def main() -> None:
         err_msg,
         time.time() - t0,
     )
+
+    if not args.no_validate_latest:
+        validate_latest_prize_detail(conn)
+
     conn.close()
+    if status != "success":
+        sys.exit(1)
 
 
 if __name__ == "__main__":
