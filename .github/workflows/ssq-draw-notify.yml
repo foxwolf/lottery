@@ -35,7 +35,6 @@ jobs:
 
       - name: Refresh SSQ mingxi (recent 30)
         run: python3 update_ssq_mingxi.py --limit 30
-        continue-on-error: true
 
       - name: Always compare watch pick
         run: python3 scripts/ssq_watch_compare.py --mode draw-notify --out _draw_notify.md
