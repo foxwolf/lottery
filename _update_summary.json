@@ -38,19 +38,19 @@
       "max_date": "2026-11-04"
     },
     "d3": {
-      "count": 335,
-      "max_period": "2026295",
-      "max_date": "2026-11-05"
+      "count": 336,
+      "max_period": "2026296",
+      "max_date": "2026-11-06"
     },
     "p3": {
-      "count": 286,
-      "max_period": "2026295",
-      "max_date": "2026-11-05"
+      "count": 287,
+      "max_period": "2026296",
+      "max_date": "2026-11-06"
     },
     "p5": {
-      "count": 286,
-      "max_period": "2026295",
-      "max_date": "2026-11-05"
+      "count": 287,
+      "max_period": "2026296",
+      "max_date": "2026-11-06"
     }
   },
   "summary": {
@@ -59,13 +59,15 @@
       "inserted": 0,
       "periods": [],
       "api_latest": "2026127",
-      "source": "https://datachart.500.com/ssq/history/newinc/history.php"
+      "source": "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice?name=ssq"
     },
     "d3": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026295"
+      "inserted": 1,
+      "periods": [
+        "2026296"
+      ],
+      "api_latest": "2026296"
     },
     "dlt": {
       "ok": true,
@@ -75,15 +77,19 @@
     },
     "p3": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026295"
+      "inserted": 1,
+      "periods": [
+        "2026296"
+      ],
+      "api_latest": "2026296"
     },
     "p5": {
       "ok": true,
-      "inserted": 0,
-      "periods": [],
-      "api_latest": "2026295"
+      "inserted": 1,
+      "periods": [
+        "2026296"
+      ],
+      "api_latest": "2026296"
     }
   }
 }
